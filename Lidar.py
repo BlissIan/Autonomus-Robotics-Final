@@ -11,26 +11,23 @@ PORT = '/dev/ttyUSB0'
 BAUDRATE = 256000
 lidar = RPLidar(PORT, baudrate=BAUDRATE)
 
+stop_event = threading.Event()
 latest_scan = []  
 latest_scan_lock = threading.Lock()
-running = True    
+#running = True    
 
 # -------------------------------
 # Thread to continuously read scans
 # -------------------------------
 def read_lidar():
-    global latest_scan, running
     try:
         for scan in lidar.iter_scans(max_buf_meas=5000):
-            if not running:
+            if stop_event.is_set():
                 break
             with latest_scan_lock:
-                latest_scan = scan.copy()  # thread-safe copy
+                latest_scan[:] = scan
     except Exception as e:
         print("LIDAR read error:", e)
-
-reader_thread = threading.Thread(target=read_lidar)
-reader_thread.start()
 
 # -------------------------------
 # Helper functions
@@ -60,21 +57,27 @@ def get_points_cartesian():
 # Main loop
 # -------------------------------
 def Lidar_Scan():
+    reader_thread = threading.Thread(target=read_lidar)
+    reader_thread.start()
+
     try:
-        while True:
+        while not stop_event.is_set():
             polar_points = get_points_polar()
-            #cart_points = get_points_cartesian()
 
             if polar_points:
                 print(f"length: {len(polar_points)}")
-                #print("Polar (rad, [mm]):", polar_points[:10])
 
             time.sleep(0.05)
+
     finally:
-        running = False
-        reader_thread.join()
+        print("Stopping LIDAR...")
+
+        stop_event.set()
+
         lidar.stop_motor()
         lidar.stop()
         lidar.disconnect()
-        print("Disconnected cleanly.")
 
+        reader_thread.join(timeout=2)
+
+        print("Disconnected cleanly.")
