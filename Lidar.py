@@ -33,12 +33,13 @@ def read_lidar():
 # Helper functions
 # -------------------------------
 def get_points_polar():
-    points = []
     with latest_scan_lock:
-        scan_copy = latest_scan.copy()
+        scan_copy = list(latest_scan) 
+
+    points = []
     for _, angle, distance in scan_copy:
         if distance > 0:
-            points.append((np.round(math.radians(angle), 2), np.round(distance, 2)))
+            points.append((math.radians(angle), distance))
     return points
 
 def get_points_cartesian():
@@ -56,28 +57,22 @@ def get_points_cartesian():
 # -------------------------------
 # Main loop
 # -------------------------------
-def Lidar_Scan():
+def Lidar_Scan(q1):
     reader_thread = threading.Thread(target=read_lidar)
     reader_thread.start()
 
     try:
         while not stop_event.is_set():
-            polar_points = get_points_polar()
 
-            if polar_points:
-                print(f"length: {len(polar_points)}")
+            polar = get_points_polar()   # convert here
+            filtered = polar[::5]        # reduce load
 
+            q1.put(filtered)
             time.sleep(0.05)
 
     finally:
-        print("Stopping LIDAR...")
-
         stop_event.set()
-
         lidar.stop_motor()
         lidar.stop()
         lidar.disconnect()
-
-        reader_thread.join(timeout=2)
-
-        print("Disconnected cleanly.")
+        reader_thread.join()
