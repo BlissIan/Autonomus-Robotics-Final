@@ -12,14 +12,14 @@ if __name__ == "__main__":
    
 
     Rover_drive_thread = Thread(target=Rover_control, args=(q1, stop_event))
-    Lidar_thread = Thread(target=Lidar_Scan)
+    Lidar_thread = Thread(target=Lidar_Scan, args=(q1,))
 
     try:
         Rover_drive_thread.start()
         Lidar_thread.start()
 
         while True:
-            time.sleep(1)
+            time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("Shutting down...")
