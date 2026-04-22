@@ -1,7 +1,8 @@
 from gpiozero import Motor, PWMOutputDevice
 from multiprocessing import Process, Queue
+from queue import Empty
 import time
-
+import math
 
 
 right_motor = Motor(forward=6, backward=5)
@@ -64,7 +65,7 @@ def drive(w, v):
     elif wR < -bound:
         wR = -bound
 
-    #Implement linear interpolation to bould to a percent duty cycle
+    #Implement linear interpolation to bound to a percent duty cycle
     wR_percent = ((wR - (-bound)) / (bound -(-bound)) * (output_bound - (-output_bound)) + (-output_bound))
     wL_percent = ((wL - (-bound)) / (bound -(-bound)) * (output_bound - (-output_bound)) + (-output_bound))
 
@@ -76,22 +77,62 @@ def drive(w, v):
     right_side(wR_percent)
     left_side(wL_percent)
 
+def Cord_interp(cords):
+    for angle, distance in cords:
+
+        # Ignore far points
+        if distance > 200:
+            continue
+
+        # Normalize angle to 0–2π
+        a = angle % (2 * math.pi)
+
+        # FRONT
+        if a < math.radians(45) or a > math.radians(315):
+            print("Obstacle in FRONT")
+            print(f"Angle: {math.degrees(a):.2f} degrees, Distance: {distance:.2f} cm")
+
+        # RIGHT
+        if math.radians(45) <= a < math.radians(135):
+            print("Obstacle on RIGHT")
+            print(f"Angle: {math.degrees(a):.2f} degrees, Distance: {distance:.2f} cm")
+        # BACK
+        #if math.radians(135) <= a < math.radians(225):
+        #    print("Obstacle in BACK")
+
+        # LEFT
+        if math.radians(225) <= a < math.radians(315):
+            print("Obstacle on LEFT")
+            print(f"Angle: {math.degrees(a):.2f} degrees, Distance: {distance:.2f} cm")
 
 
-#Driving logic
 def Rover_control(queue1, stop_event):
+    print("Driving thread started")
+
     try:
         while not stop_event.is_set():
-            drive(0,1)
-            time.sleep(0.1)
+
+            # Non-blocking queue read
+            try:
+                cords = queue1.get_nowait()
+            except Empty:
+                cords = None
+
+            # Process LIDAR points if available
+            if cords:
+                Cord_interp(cords)
+
+            # Rover logic runs every loop
+            drive(0, 0)
+
+            time.sleep(0.01)
 
     finally:
         print("Stopping rover")
-        drive(0,0)
+        drive(0, 0)
 
         right_pwm.close()
         left_pwm.close()
         right_motor.close()
         left_motor.close()
-
 
